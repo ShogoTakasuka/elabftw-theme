@@ -112,6 +112,18 @@ pick up new versions automatically.
 Developed with [Claude Code](https://claude.com/claude-code) (Anthropic).
 [Claude Code](https://claude.com/claude-code)（Anthropic）を用いて開発しました。
 
+## Disclaimer / 免責事項
+
+This software is provided **“as is”, without warranty of any kind**, and you use
+it **at your own risk**. The author accepts **no liability** for any damage, data
+loss, or other problems arising from its use. It is an unofficial add-on and is
+not endorsed or supported by eLabFTW / Deltablot.
+
+本ソフトウェアは **現状有姿（as is）で提供され、いかなる保証もありません**。
+ご利用は **すべて自己責任**でお願いします。利用に起因する損害・データ損失・
+その他の不具合について、**作者は一切の責任を負いません**。本ツールは非公式の
+アドオンであり、eLabFTW / Deltablot による承認・サポートを受けたものではありません。
+
 ## License / ライセンス
 
 - This project: **MIT** — see [LICENSE](./LICENSE). / 本体は **MIT**。
