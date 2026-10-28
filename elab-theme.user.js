@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         eLabFTW Theme
 // @namespace    https://github.com/ShogoTakasuka/elabftw-theme
-// @version      2.8.0
+// @version      3.0.0
 // @description  Restyle any eLabFTW instance — themes, accent color, font, density & code syntax highlighting. Per-user, no server changes, version-resilient.
 // @description:ja eLabFTW を本体無改造で着せ替え（テーマ/アクセント/フォント/余白/コード視認性）。設定は各自のブラウザにのみ保存。
 // @author       Shogo Takasuka
@@ -99,22 +99,42 @@
   ];
 
   // --- eLabFTW detection (cheap checks first, short-circuit) -----------------
+  // Markers verified against eLabFTW 5.5.x and 6.0.x page templates
+  // (src/templates/{footer,base,head}.html). 6.0 renamed the assets from
+  // /assets/elabftw.min.css to /assets/main.min.css, so the asset-name check
+  // alone (the only one that matched on 5.5) no longer fires; the markers below
+  // exist on every page of both versions, including the login page.
   function isElabFTW() {
     try {
-      // 1) assets referencing elabftw
+      // 1) <script type="application/json" id="core"> holding the user state
+      //    ({"isAnon":..,"isAuth":..,"currentTeam":..}) — emitted by footer.html
+      var core = document.querySelector('script#core[type="application/json" i]');
+      if (core && /"isAuth"/.test(core.textContent || "")) return true;
+      // 2) the "About eLabFTW" modal included by base.html on every page
+      if (document.getElementById("aboutElabftwModal")) return true;
+      // 3) 6.0+: logo / favicon served by the branding API
+      if (
+        document.querySelector(
+          'img[src*="/api/v2/instance/branding/"], link[href*="/api/v2/instance/branding/"]'
+        )
+      )
+        return true;
+      // 4) <=5.5: assets referencing elabftw (/assets/elabftw.min.css)
       if (
         document.querySelector('link[href*="elabftw" i], script[src*="elabftw" i]')
       )
         return true;
-      // 2) <meta name="generator" content="eLabFTW ...">
-      var m = document.querySelector('meta[name="generator" i]');
+      // 5) <meta name="generator"|"description" content="... eLabFTW">
+      var m = document.querySelector('meta[name="generator" i], meta[name="description" i]');
       if (m && /elabftw/i.test(m.content || "")) return true;
-      // 3) footer string "Powered by eLabFTW"
-      if (document.body && /powered by elabftw/i.test(document.body.textContent))
+      // 6) footer string "Powered by eLabFTW" (the two words are separated by a
+      //    newline + indentation in the rendered HTML, hence \s+)
+      if (document.body && /powered\s+by\s+elabftw/i.test(document.body.textContent))
         return true;
-      // 4) navbar brand
+      // 7) navbar logo (<img alt="eLabFTW"> on 6.0, text/svg before)
       var b = document.querySelector('.navbar-brand, a[href*="dashboard.php"]');
-      if (b && /elabftw/i.test(b.textContent || "")) return true;
+      if (b && /elabftw/i.test((b.textContent || "") + " " + (b.querySelector("img") ? b.querySelector("img").alt : "")))
+        return true;
     } catch (e) {}
     return false;
   }

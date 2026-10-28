@@ -96,7 +96,10 @@ instantly on non-eLabFTW pages. To run it only on your server, edit the header:
 
 ## Compatibility / 対応
 
-- Tested against **eLabFTW 5.5.x** (Bootstrap 5). / **eLabFTW 5.5.x**（Bootstrap 5）で確認。
+- Works on **eLabFTW 5.5.x and 6.0.x**. v3.0.0 fixed detection for 6.0, whose
+  pages no longer load an asset named `elabftw.*` (the script exited silently).
+  / **eLabFTW 5.5.x と 6.0.x** で動作。6.0 ではアセット名が変わり自動判定が全て外れて
+  無言で終了していたため、v3.0.0 で判定を修正。
 - Code highlighting reuses eLabFTW's own Prism tokens when present and falls back
   to highlight.js, so there's no double-processing.
   / コードは既存の Prism トークンを活かし、無ければ highlight.js で補完（二重処理なし）。
