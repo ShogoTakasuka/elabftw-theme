@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         eLabFTW Theme
 // @namespace    https://github.com/ShogoTakasuka/elabftw-theme
-// @version      3.0.0
-// @description  Restyle any eLabFTW instance — themes, accent color, font, density & code syntax highlighting. Per-user, no server changes, version-resilient.
-// @description:ja eLabFTW を本体無改造で着せ替え（テーマ/アクセント/フォント/余白/コード視認性）。設定は各自のブラウザにのみ保存。
+// @version      4.0.0
+// @description  Restyle any eLabFTW instance — extra themes on top of eLabFTW's own Light/Dark/Midnight, accent color, fonts, density & code syntax highlighting. Per-user, no server changes.
+// @description:ja eLabFTW を本体無改造で着せ替え。eLabFTW 自身の Light/Dark/Midnight に追加テーマ・アクセント・フォント・余白・コード配色を重ねる。設定は各自のブラウザにのみ保存。
 // @author       Shogo Takasuka
 // @license      MIT
 // @match        *://*/*
@@ -20,9 +20,18 @@
  * eLabFTW Theme — a per-user skin for eLabFTW.
  * -----------------------------------------------------------------------------
  * HOW IT WORKS
- *   - Sets data-* attributes / CSS custom properties on <html>; the actual
- *     colors come from overriding Bootstrap 5 CSS variables (--bs-*), so it
- *     keeps working even when eLabFTW changes class names (= upgrade resilient).
+ *   - eLabFTW paints its whole UI through its own CSS custom properties
+ *     (--mainbackground, --white, --primary, --link, ...) defined on :root and
+ *     switched by the html classes .dark-mode / .midnight (its built-in
+ *     Light / Dark / Midnight themes). This script only sets data-* attributes
+ *     on <html> and overrides THOSE properties, so eLabFTW keeps painting every
+ *     component itself and the two never fight over colors.
+ *   - Default is "eLabFTW setting": nothing is overridden and the theme chosen
+ *     in eLabFTW's user control panel is used as-is. A primary color set in the
+ *     user control panel (6.0+) also wins over a theme's primary; only the
+ *     accent picker here overrides it, and only while it is set.
+ *   - Underneath, eLabFTW 5.5 and 6.0 ship Bootstrap 4; no --bs-* variable is
+ *     involved.
  *   - Each user's choices are saved in their own browser (localStorage) and
  *     apply to them only. The eLabFTW server and other users are never touched.
  *   - Styles are injected with GM_addStyle (a standard userscript API) so they
@@ -140,207 +149,112 @@
   }
 
   // --- theme definitions (edit freely) --------------------------------------
-  // Each theme is a set of Bootstrap 5 CSS variables to override.
+  // eLabFTW's own CSS custom properties (src/scss/_variables.scss). Names are
+  // identical in 5.5.x and 6.0.x unless noted; :root holds the light values and
+  // html.dark-mode / html.midnight override them.
+  //   --mainbackground  page background (body)
+  //   --white           raised surfaces: .box, inputs, tables, dropdowns, lists
+  //   --highlighted     highlighted rows          --superlight   blockquote, hover
+  //   --firstlevel      borders                   --secondlevel  muted text, hr
+  //   --thirdlevel      input borders             --medium       secondary text
+  //   --mediumstrong    body text                 --strongest    input text, emphasis
+  //   --primary         buttons, active items     --primary-fg   text on primary (6.0+)
+  //   --link / --link-hover  links (6.0+; on 5.5 links use --primary)
+  //   --nav-bg          navbar background (6.0+)
+  // A theme is a palette for those properties, written compactly with pal().
+  // "native" sets nothing: eLabFTW's own Light / Dark / Midnight stay in charge.
+  function isDark(hex) {
+    var c = String(hex || "").replace("#", "");
+    if (c.length === 3) c = c.replace(/./g, "$&$&");
+    if (!/^[0-9a-f]{6}$/i.test(c)) return false;
+    var n = parseInt(c, 16);
+    return 0.2126 * (n >> 16 & 255) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255) < 140;
+  }
+  function fgFor(hex) { return isDark(hex) ? "#ffffff" : "#131313"; }
+
+  // bg: page · surface: boxes/inputs · raised: hover/highlight · border ·
+  // muted: secondary text · text: body · strong: emphasis · link · linkHover ·
+  // primary (defaults to link) · nav (optional navbar background)
+  function pal(o) {
+    var primary = o.primary || o.link;
+    var v = {
+      "--mainbackground": o.bg,
+      "--white": o.surface,
+      "--highlighted": o.raised,
+      "--superlight": o.raised,
+      "--firstlevel": o.border,
+      "--secondlevel": o.muted,
+      "--thirdlevel": o.muted,
+      "--medium": o.muted,
+      "--mediumstrong": o.text,
+      "--strongest": o.strong,
+      "--link": o.link,
+      "--link-hover": o.linkHover || o.link,
+      "--primary": primary,
+      "--primary-fg": fgFor(primary)
+    };
+    if (o.nav) v["--nav-bg"] = o.nav;
+    return v;
+  }
+
   var THEMES = {
-    light: { label: "Light (default)", vars: {} },
-    dark: {
-      label: "Dark",
-      scheme: "dark",
-      vars: {
-        "--bs-body-bg": "#1b1e24",
-        "--bs-body-color": "#e6e9ef",
-        "--bs-secondary-bg": "#252a33",
-        "--bs-tertiary-bg": "#2d333d",
-        "--bs-secondary-color": "#b9c2d0",
-        "--bs-emphasis-color": "#ffffff",
-        "--bs-border-color": "#3a414d",
-        "--bs-link-color": "#7db1ff",
-        "--bs-link-hover-color": "#a7caff",
-        "--bs-heading-color": "#f1f4f9"
-      }
-    },
-    midnight: {
-      label: "Midnight (OLED black)",
-      scheme: "dark",
-      vars: {
-        "--bs-body-bg": "#000000",
-        "--bs-body-color": "#e4e7ec",
-        "--bs-secondary-bg": "#0d0f12",
-        "--bs-tertiary-bg": "#16191e",
-        "--bs-secondary-color": "#aeb6c2",
-        "--bs-emphasis-color": "#ffffff",
-        "--bs-border-color": "#2a2e35",
-        "--bs-link-color": "#79b8ff",
-        "--bs-link-hover-color": "#a7caff",
-        "--bs-heading-color": "#ffffff"
-      }
-    },
-    nord: {
-      label: "Nord",
-      scheme: "dark",
-      vars: {
-        "--bs-body-bg": "#2e3440",
-        "--bs-body-color": "#e5e9f0",
-        "--bs-secondary-bg": "#3b4252",
-        "--bs-tertiary-bg": "#434c5e",
-        "--bs-secondary-color": "#c0c8d8",
-        "--bs-emphasis-color": "#eceff4",
-        "--bs-border-color": "#4c566a",
-        "--bs-link-color": "#88c0d0",
-        "--bs-link-hover-color": "#8fbcbb",
-        "--bs-heading-color": "#eceff4"
-      }
-    },
-    dracula: {
-      label: "Dracula",
-      scheme: "dark",
-      vars: {
-        "--bs-body-bg": "#282a36",
-        "--bs-body-color": "#f8f8f2",
-        "--bs-secondary-bg": "#343746",
-        "--bs-tertiary-bg": "#3c3f52",
-        "--bs-secondary-color": "#c8cad8",
-        "--bs-emphasis-color": "#ffffff",
-        "--bs-border-color": "#44475a",
-        "--bs-link-color": "#bd93f9",
-        "--bs-link-hover-color": "#ff79c6",
-        "--bs-heading-color": "#f8f8f2"
-      }
-    },
-    "solarized-dark": {
-      label: "Solarized Dark",
-      scheme: "dark",
-      vars: {
-        "--bs-body-bg": "#002b36",
-        "--bs-body-color": "#cfdadb",
-        "--bs-secondary-bg": "#073642",
-        "--bs-tertiary-bg": "#0a4250",
-        "--bs-secondary-color": "#93a1a1",
-        "--bs-emphasis-color": "#fdf6e3",
-        "--bs-border-color": "#0a4a5a",
-        "--bs-link-color": "#268bd2",
-        "--bs-link-hover-color": "#2aa198",
-        "--bs-heading-color": "#eee8d5"
-      }
-    },
-    sepia: {
-      label: "Sepia",
-      vars: {
-        "--bs-body-bg": "#f4ecd8",
-        "--bs-body-color": "#4a3f2f",
-        "--bs-secondary-bg": "#ebe0c6",
-        "--bs-tertiary-bg": "#e3d6b8",
-        "--bs-border-color": "#d8c8a0",
-        "--bs-link-color": "#8a5a2b",
-        "--bs-heading-color": "#3a3122"
-      }
-    },
-    "solarized-light": {
-      label: "Solarized Light",
-      vars: {
-        "--bs-body-bg": "#fdf6e3",
-        "--bs-body-color": "#586e75",
-        "--bs-secondary-bg": "#eee8d5",
-        "--bs-tertiary-bg": "#e4ddc8",
-        "--bs-border-color": "#d8cfb0",
-        "--bs-link-color": "#268bd2",
-        "--bs-heading-color": "#073642"
-      }
-    },
-    "gruvbox-dark": {
-      label: "Gruvbox Dark",
-      scheme: "dark",
-      vars: {
-        "--bs-body-bg": "#282828",
-        "--bs-body-color": "#ebdbb2",
-        "--bs-secondary-bg": "#32302f",
-        "--bs-tertiary-bg": "#3c3836",
-        "--bs-secondary-color": "#bdae93",
-        "--bs-emphasis-color": "#fbf1c7",
-        "--bs-border-color": "#504945",
-        "--bs-link-color": "#83a598",
-        "--bs-link-hover-color": "#8ec07c",
-        "--bs-heading-color": "#fbf1c7"
-      }
-    },
-    "gruvbox-light": {
-      label: "Gruvbox Light",
-      vars: {
-        "--bs-body-bg": "#fbf1c7",
-        "--bs-body-color": "#3c3836",
-        "--bs-secondary-bg": "#f2e5bc",
-        "--bs-tertiary-bg": "#ebdbb2",
-        "--bs-border-color": "#d5c4a1",
-        "--bs-link-color": "#076678",
-        "--bs-heading-color": "#282828"
-      }
-    },
-    "tokyo-night": {
-      label: "Tokyo Night",
-      scheme: "dark",
-      vars: {
-        "--bs-body-bg": "#1a1b26",
-        "--bs-body-color": "#c0caf5",
-        "--bs-secondary-bg": "#24283b",
-        "--bs-tertiary-bg": "#2f334d",
-        "--bs-secondary-color": "#9aa5ce",
-        "--bs-emphasis-color": "#ffffff",
-        "--bs-border-color": "#3b4261",
-        "--bs-link-color": "#7aa2f7",
-        "--bs-link-hover-color": "#7dcfff",
-        "--bs-heading-color": "#c0caf5"
-      }
-    },
-    "one-dark": {
-      label: "One Dark",
-      scheme: "dark",
-      vars: {
-        "--bs-body-bg": "#282c34",
-        "--bs-body-color": "#abb2bf",
-        "--bs-secondary-bg": "#21252b",
-        "--bs-tertiary-bg": "#2c313a",
-        "--bs-secondary-color": "#9199a5",
-        "--bs-emphasis-color": "#ffffff",
-        "--bs-border-color": "#3e4451",
-        "--bs-link-color": "#61afef",
-        "--bs-link-hover-color": "#56b6c2",
-        "--bs-heading-color": "#e6e6e6"
-      }
-    },
-    "catppuccin-mocha": {
-      label: "Catppuccin Mocha",
-      scheme: "dark",
-      vars: {
-        "--bs-body-bg": "#1e1e2e",
-        "--bs-body-color": "#cdd6f4",
-        "--bs-secondary-bg": "#181825",
-        "--bs-tertiary-bg": "#313244",
-        "--bs-secondary-color": "#a6adc8",
-        "--bs-emphasis-color": "#ffffff",
-        "--bs-border-color": "#45475a",
-        "--bs-link-color": "#89b4fa",
-        "--bs-link-hover-color": "#b4befe",
-        "--bs-heading-color": "#cdd6f4"
-      }
-    },
-    contrast: {
-      label: "High contrast",
-      vars: {
-        "--bs-body-bg": "#ffffff",
-        "--bs-body-color": "#000000",
-        "--bs-secondary-bg": "#f0f0f0",
-        "--bs-border-color": "#000000",
-        "--bs-link-color": "#0033cc",
-        "--bs-heading-color": "#000000"
-      }
-    },
-    custom: { label: "Custom…", vars: {}, custom: true }
+    native: { label: "eLabFTW setting (Light / Dark / Midnight)", scheme: null, vars: {} },
+    dark: { label: "Dark", scheme: "dark", vars: pal({
+      bg: "#1b1e24", surface: "#252a33", raised: "#2d333d", border: "#3a414d",
+      muted: "#b9c2d0", text: "#e6e9ef", strong: "#ffffff", link: "#7db1ff", linkHover: "#a7caff" }) },
+    midnight: { label: "Midnight (OLED black)", scheme: "dark", vars: pal({
+      bg: "#000000", surface: "#0d0f12", raised: "#16191e", border: "#2a2e35",
+      muted: "#aeb6c2", text: "#e4e7ec", strong: "#ffffff", link: "#79b8ff", linkHover: "#a7caff", nav: "#000000" }) },
+    nord: { label: "Nord", scheme: "dark", vars: pal({
+      bg: "#2e3440", surface: "#3b4252", raised: "#434c5e", border: "#4c566a",
+      muted: "#c0c8d8", text: "#e5e9f0", strong: "#eceff4", link: "#88c0d0", linkHover: "#8fbcbb" }) },
+    dracula: { label: "Dracula", scheme: "dark", vars: pal({
+      bg: "#282a36", surface: "#343746", raised: "#3c3f52", border: "#44475a",
+      muted: "#c8cad8", text: "#f8f8f2", strong: "#ffffff", link: "#bd93f9", linkHover: "#ff79c6" }) },
+    "solarized-dark": { label: "Solarized Dark", scheme: "dark", vars: pal({
+      bg: "#002b36", surface: "#073642", raised: "#0a4250", border: "#0a4a5a",
+      muted: "#93a1a1", text: "#cfdadb", strong: "#fdf6e3", link: "#268bd2", linkHover: "#2aa198" }) },
+    sepia: { label: "Sepia", scheme: "light", vars: pal({
+      bg: "#efe6d0", surface: "#faf4e4", raised: "#ebe0c6", border: "#d8c8a0",
+      muted: "#7a6a52", text: "#4a3f2f", strong: "#3a3122", link: "#8a5a2b", linkHover: "#6b4420" }) },
+    "solarized-light": { label: "Solarized Light", scheme: "light", vars: pal({
+      bg: "#eee8d5", surface: "#fdf6e3", raised: "#e4ddc8", border: "#d8cfb0",
+      muted: "#839496", text: "#586e75", strong: "#073642", link: "#268bd2", linkHover: "#2aa198" }) },
+    "gruvbox-dark": { label: "Gruvbox Dark", scheme: "dark", vars: pal({
+      bg: "#282828", surface: "#32302f", raised: "#3c3836", border: "#504945",
+      muted: "#bdae93", text: "#ebdbb2", strong: "#fbf1c7", link: "#83a598", linkHover: "#8ec07c" }) },
+    "gruvbox-light": { label: "Gruvbox Light", scheme: "light", vars: pal({
+      bg: "#f2e5bc", surface: "#fbf1c7", raised: "#ebdbb2", border: "#d5c4a1",
+      muted: "#7c6f64", text: "#3c3836", strong: "#282828", link: "#076678", linkHover: "#427b58" }) },
+    "tokyo-night": { label: "Tokyo Night", scheme: "dark", vars: pal({
+      bg: "#1a1b26", surface: "#24283b", raised: "#2f334d", border: "#3b4261",
+      muted: "#9aa5ce", text: "#c0caf5", strong: "#ffffff", link: "#7aa2f7", linkHover: "#7dcfff" }) },
+    "one-dark": { label: "One Dark", scheme: "dark", vars: pal({
+      bg: "#282c34", surface: "#21252b", raised: "#2c313a", border: "#3e4451",
+      muted: "#9199a5", text: "#abb2bf", strong: "#ffffff", link: "#61afef", linkHover: "#56b6c2" }) },
+    catppuccin: { label: "Catppuccin Mocha", scheme: "dark", vars: pal({
+      bg: "#1e1e2e", surface: "#181825", raised: "#313244", border: "#45475a",
+      muted: "#a6adc8", text: "#cdd6f4", strong: "#ffffff", link: "#89b4fa", linkHover: "#b4befe" }) },
+    "high-contrast": { label: "High contrast", scheme: "light", vars: pal({
+      bg: "#ffffff", surface: "#ffffff", raised: "#f0f0f0", border: "#000000",
+      muted: "#000000", text: "#000000", strong: "#000000", link: "#0033cc", linkHover: "#0033cc" }) },
+    // "custom": the six pickers below are written inline by apply(); its
+    // light/dark scheme follows the chosen background.
+    custom: { label: "Custom…", scheme: "custom", vars: {} }
   };
+  // Custom theme → palette (primary is left to the accent picker / eLabFTW).
+  function customVars(c) {
+    var v = pal({ bg: c.bg, surface: c.surface, raised: c.surface, border: c.border,
+      muted: c.text, text: c.text, strong: c.heading, link: c.link, linkHover: c.link });
+    delete v["--primary"]; delete v["--primary-fg"];
+    return v;
+  }
+  var CUSTOM_INLINE = Object.keys(customVars(DEFAULT_CUSTOM_THEME));
+  var ACCENT_INLINE = ["--primary", "--primary-fg", "--link", "--link-hover"];
 
-  // Accent color is chosen with a native color picker (color wheel / RGB hex),
-  // so no preset list is needed. "" = use the theme's default accent.
-  var ACCENT_DEFAULT = "#29aeb9";
-
+  // Accent color is chosen with a native color picker (color wheel / RGB hex).
+  // "" = unset: eLabFTW's own primary (user control panel in 6.0+) is used.
+  var ACCENT_DEFAULT = "#29aeb9"; // only the picker's initial swatch
   // Fonts are picked separately for Latin and Japanese text, then merged into a
   // single font-family stack: "<Latin families>, <Japanese families>, <generic>".
   // The browser uses the Latin font for ASCII and falls through to the Japanese
@@ -386,8 +300,8 @@
   var DENSITIES = { comfortable: "Comfortable", compact: "Compact" };
 
   var state = {
-    theme: get("theme", "light"),
-    accent: get("accent", "#29aeb9"),
+    theme: get("theme", "native"),
+    accent: get("accent", ""),
     fontLatin: get("fontLatin", "system"),
     fontJa: get("fontJa", "system"),
     density: get("density", "comfortable"),
@@ -398,42 +312,31 @@
     customTheme: getJSON("customTheme", DEFAULT_CUSTOM_THEME),
     customCode: getJSON("customCode", DEFAULT_CUSTOM_CODE)
   };
+  // Migration from v2/v3 (which drove --bs-* variables): the old "light" preset
+  // is now "follow eLabFTW", and the old always-on default accent becomes unset
+  // so eLabFTW's own primary color shows through.
+  if (get("schema", "") !== "4") {
+    if (state.theme === "light") { state.theme = "native"; set("theme", "native"); }
+    if (state.accent === ACCENT_DEFAULT) { state.accent = ""; set("accent", ""); }
+    set("schema", "4");
+  }
 
-  // Extra coverage for dark themes: many eLabFTW/Bootstrap components carry
-  // their own colors that the --bs-* overrides don't reach (tables, cards,
-  // form fields, dropdowns...). Re-point those to the theme variables so text
-  // stays readable on a dark background. (User-authored note content with its
-  // own inline colors is intentionally left untouched.)
-  function darkContrastCss(sel) {
+  // Extra coverage for dark schemes. eLabFTW recolors inputs, tables,
+  // dropdowns, lists, alerts and blockquotes through its variables already;
+  // these Bootstrap utility/component classes are the ones it leaves at their
+  // hard-coded light colors.
+  function darkExtrasCss(sel) {
     return (
-      sel + " .text-muted," + sel + " .text-secondary{color:var(--bs-secondary-color)!important;}\n" +
-      sel + " table," + sel + " td," + sel + " th{color:var(--bs-body-color);}\n" +
-      sel + " .table{--bs-table-bg:transparent;--bs-table-color:var(--bs-body-color);" +
-        "--bs-table-striped-color:var(--bs-body-color);--bs-table-border-color:var(--bs-border-color);}\n" +
-      sel + " .card," + sel + " .list-group-item{background-color:var(--bs-secondary-bg);" +
-        "color:var(--bs-body-color);border-color:var(--bs-border-color);}\n" +
-      sel + " .bg-white," + sel + " .bg-light{background-color:var(--bs-secondary-bg)!important;" +
-        "color:var(--bs-body-color);}\n" +
-      sel + " .form-control," + sel + " .form-select," + sel + " .form-control:focus{" +
-        "background-color:var(--bs-tertiary-bg);color:var(--bs-body-color);border-color:var(--bs-border-color);}\n" +
-      sel + " .form-control::placeholder{color:var(--bs-secondary-color);}\n" +
-      sel + " .input-group-text{background-color:var(--bs-tertiary-bg);color:var(--bs-body-color);" +
-        "border-color:var(--bs-border-color);}\n" +
-      sel + " .dropdown-menu{background-color:var(--bs-secondary-bg);color:var(--bs-body-color);" +
-        "border-color:var(--bs-border-color);}\n" +
-      sel + " .dropdown-item{color:var(--bs-body-color);}\n" +
-      sel + " .dropdown-item:hover," + sel + " .dropdown-item:focus{" +
-        "background-color:var(--bs-tertiary-bg);color:var(--bs-emphasis-color);}\n" +
-      sel + " .modal-content," + sel + " .offcanvas{background-color:var(--bs-body-bg);color:var(--bs-body-color);}\n" +
-      sel + " .border," + sel + " .border-top," + sel + " .border-bottom," + sel + " .border-start," +
-        sel + " .border-end{border-color:var(--bs-border-color)!important;}\n" +
-      sel + " blockquote{color:var(--bs-body-color);}\n"
+      sel + " .card," + sel + " .bg-white," + sel + " .bg-light," + sel + " .custom-select," +
+      sel + " .popover{background-color:var(--white)!important;color:var(--mediumstrong);" +
+        "border-color:var(--firstlevel);}\n" +
+      sel + " .popover-body{color:var(--mediumstrong);}\n"
     );
   }
 
   // eLabFTW renders the note body into #body_view. Injected content (e.g. PAM
   // snapshot tables) hard-codes light backgrounds, #ddd borders and sometimes
-  // dark text via INLINE styles, which a dark page can't fix through --bs-*
+  // dark text via INLINE styles, which a dark page can't fix through variables
   // alone. Scope an override to #body_view: clear opaque light backgrounds so
   // the dark page shows through, lighten text that doesn't set its own color,
   // and re-tint hard-coded borders. Links and code blocks are left untouched
@@ -453,39 +356,27 @@
       sel + " #body_view{background-color:transparent!important;}\n" +
       expand(bgEls, "background-color:transparent!important;") +
       // non-important: inline-colored elements (e.g. a red callout) keep their color
-      expand(txtEls, "color:var(--bs-body-color);") +
-      bv + "table," + bv + "th," + bv + "td{border-color:var(--bs-border-color)!important;}\n"
+      expand(txtEls, "color:var(--mediumstrong);") +
+      bv + "table," + bv + "th," + bv + "td{border-color:var(--firstlevel)!important;}\n"
     );
   }
 
   // --- stylesheet generation ------------------------------------------------
   function buildThemeCss() {
     var css = "";
+    // one block of eLabFTW variables per preset (native and custom set none here)
     Object.keys(THEMES).forEach(function (key) {
       var t = THEMES[key];
-      var sel = 'html[data-elab-theme="' + key + '"]';
       var body = "";
-      Object.keys(t.vars).forEach(function (v) {
-        body += v + ":" + t.vars[v] + ";";
-      });
-      if (t.scheme) body += "color-scheme:" + t.scheme + ";";
-      if (body) css += sel + "{" + body + "}\n";
-      css +=
-        sel +
-        " body{background-color:var(--bs-body-bg);color:var(--bs-body-color);}\n";
-      // dark themes + the custom theme get the component-coverage rules so
-      // tables/cards/#body_view adapt to whatever background is in use
-      if (t.scheme === "dark" || t.custom) css += darkContrastCss(sel) + darkBodyCss(sel);
+      Object.keys(t.vars).forEach(function (v) { body += v + ":" + t.vars[v] + ";"; });
+      if (body) css += 'html[data-elab-theme="' + key + '"]{' + body + "}\n";
     });
-
-    // accent color (only when --elab-accent is set)
-    css +=
-      "html[style*='--elab-accent']{--bs-primary:var(--elab-accent);" +
-      "--bs-link-color:var(--elab-accent);--bs-link-hover-color:var(--elab-accent);}\n";
-    css +=
-      "html[style*='--elab-accent'] .btn-primary{" +
-      "background-color:var(--elab-accent);border-color:var(--elab-accent);}\n";
-    css += "html[style*='--elab-accent'] a:not(.btn){color:var(--elab-accent);}\n";
+    // scheme-level rules (apply() sets data-elab-scheme from the theme, or from
+    // the custom background's luminance)
+    var dark = 'html[data-elab-scheme="dark"]';
+    css += dark + "{color-scheme:dark;}\n";
+    css += 'html[data-elab-scheme="light"]{color-scheme:light;}\n';
+    css += darkExtrasCss(dark) + darkBodyCss(dark);
 
     // font — apply across the whole body, but never to icon fonts (Font Awesome /
     // Material) or to code/monospace, or eLabFTW's glyphs turn into plain letters.
@@ -496,11 +387,11 @@
       ":not(code):not(pre):not(kbd):not(samp):not(.elab-copy)" +
       "{font-family:var(--elab-font)!important;}\n";
 
-    // compact density
+    // compact density (Bootstrap 4 class names)
     css +=
-      'html[data-elab-density="compact"] .card-body{padding:.5rem .75rem;}\n' +
-      'html[data-elab-density="compact"] .table>:not(caption)>*>*{padding:.25rem .4rem;}\n' +
-      'html[data-elab-density="compact"] .form-control,html[data-elab-density="compact"] .form-select{padding:.2rem .5rem;}\n' +
+      'html[data-elab-density="compact"] .card-body,html[data-elab-density="compact"] .box{padding:.5rem .75rem;}\n' +
+      'html[data-elab-density="compact"] .table td,html[data-elab-density="compact"] .table th{padding:.25rem .4rem;}\n' +
+      'html[data-elab-density="compact"] .form-control,html[data-elab-density="compact"] .custom-select{padding:.2rem .5rem;}\n' +
       'html[data-elab-density="compact"] .nav-link{padding:.25rem .5rem;}\n' +
       'html[data-elab-density="compact"] .mb-3{margin-bottom:.5rem!important;}\n' +
       'html[data-elab-density="compact"] p{margin-bottom:.4rem;}\n';
@@ -657,28 +548,28 @@
   var PANEL_CSS =
     "#elab-theme-btn{position:fixed;left:16px;bottom:16px;z-index:99999;" +
     "width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;" +
-    "background:#2c6fbb;color:#fff;font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,.3);}\n" +
+    "background:var(--primary,#2c6fbb);color:var(--primary-fg,#fff);font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,.3);}\n" +
     "#elab-theme-panel{position:fixed;left:16px;bottom:70px;z-index:99999;width:260px;" +
-    "max-width:90vw;background:var(--bs-body-bg,#fff);color:var(--bs-body-color,#222);" +
-    "border:1px solid var(--bs-border-color,#ccc);border-radius:10px;padding:14px;" +
+    "max-width:90vw;background:var(--white,#fff);color:var(--mediumstrong,#222);" +
+    "border:1px solid var(--firstlevel,#ccc);border-radius:10px;padding:14px;" +
     "box-shadow:0 4px 20px rgba(0,0,0,.25);font-size:13px;display:none;}\n" +
     "#elab-theme-panel.open{display:block;}\n" +
     "#elab-theme-panel h6{margin:0 0 8px;font-size:13px;font-weight:700;}\n" +
     "#elab-theme-panel label{display:block;margin:10px 0 3px;font-size:12px;opacity:.8;}\n" +
     "#elab-theme-panel select{width:100%;padding:4px;border-radius:6px;" +
-    "border:1px solid var(--bs-border-color,#ccc);background:var(--bs-body-bg,#fff);color:inherit;}\n" +
+    "border:1px solid var(--firstlevel,#ccc);background:var(--white,#fff);color:inherit;}\n" +
     "#elab-theme-panel .elab-accent-row{display:flex;gap:6px;align-items:center;}\n" +
     "#elab-theme-panel input[type=color]{flex:1;height:30px;padding:0;cursor:pointer;" +
-    "border:1px solid var(--bs-border-color,#ccc);border-radius:6px;background:transparent;}\n" +
+    "border:1px solid var(--firstlevel,#ccc);border-radius:6px;background:transparent;}\n" +
     "#elab-accent-clear{padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12px;" +
-    "border:1px solid var(--bs-border-color,#ccc);background:transparent;color:inherit;}\n" +
+    "border:1px solid var(--firstlevel,#ccc);background:transparent;color:inherit;}\n" +
     "#elab-theme-panel .elab-custom{display:none;margin:6px 0 2px;padding:8px;border-radius:8px;" +
-    "border:1px solid var(--bs-border-color,#ccc);}\n" +
+    "border:1px solid var(--firstlevel,#ccc);}\n" +
     "#elab-theme-panel .elab-crow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0;}\n" +
     "#elab-theme-panel .elab-crow span{font-size:12px;opacity:.85;}\n" +
     "#elab-theme-panel .elab-crow input[type=color]{flex:0 0 44px;height:24px;}\n" +
     "#elab-theme-reset{margin-top:12px;width:100%;padding:6px;border-radius:6px;cursor:pointer;" +
-    "border:1px solid var(--bs-border-color,#ccc);background:transparent;color:inherit;}\n";
+    "border:1px solid var(--firstlevel,#ccc);background:transparent;color:inherit;}\n";
 
   function injectBaseCss() {
     var css = buildThemeCss() + PANEL_CSS;
@@ -700,8 +591,46 @@
   }
 
   // --- apply state to <html> ------------------------------------------------
+  // What the server rendered before we touched anything: eLabFTW's own theme
+  // classes and the per-user primary color it may have put inline on <html>.
+  // Restored whenever the user goes back to "eLabFTW setting" / clears accent.
+  var NATIVE = { classes: [], inline: {}, taken: false };
+  function snapshotNative() {
+    if (NATIVE.taken) return;
+    NATIVE.taken = true;
+    NATIVE.classes = ["dark-mode", "midnight"].filter(function (c) { return root.classList.contains(c); });
+    ["--primary", "--primary-fg"].forEach(function (v) { NATIVE.inline[v] = root.style.getPropertyValue(v); });
+  }
+  function restoreInline(v) {
+    if (NATIVE.inline[v]) root.style.setProperty(v, NATIVE.inline[v]);
+    else root.style.removeProperty(v);
+  }
+  function currentScheme() {
+    if (state.theme === "custom") return isDark(state.customTheme.bg) ? "dark" : "light";
+    var t = THEMES[state.theme] || THEMES.native;
+    return t.scheme; // "dark" | "light" | null (native)
+  }
+  var lastScheme = null;
+
   function apply() {
+    snapshotNative();
+    var scheme = currentScheme();
     root.setAttribute("data-elab-theme", state.theme);
+    if (scheme) root.setAttribute("data-elab-scheme", scheme);
+    else root.removeAttribute("data-elab-scheme");
+    // eLabFTW's secondary palette (alerts, modals, close buttons, status colors)
+    // keys off html.dark-mode / html.midnight, so a dark preset borrows
+    // .dark-mode and a light preset drops both. "native" leaves the classes
+    // alone except when coming back from a preset, when the server's are restored.
+    if (scheme) {
+      root.classList.remove("midnight");
+      root.classList.toggle("dark-mode", scheme === "dark");
+    } else if (lastScheme) {
+      root.classList.remove("dark-mode", "midnight");
+      NATIVE.classes.forEach(function (c) { root.classList.add(c); });
+    }
+    lastScheme = scheme;
+
     root.setAttribute("data-elab-density", state.density);
     root.setAttribute("data-elab-code", state.code);
     root.setAttribute("data-elab-code-wrap", state.codewrap);
@@ -710,22 +639,31 @@
       "--elab-code-font",
       (CODE_FONTS[state.codefont] || CODE_FONTS[CODE_FONT_DEFAULT]).stack
     );
-    if (state.accent) root.style.setProperty("--elab-accent", state.accent);
-    else root.style.removeProperty("--elab-accent");
 
-    // Custom page theme: drive Bootstrap vars inline; clear them for presets
-    // (presets set the same vars via CSS, so leftover inline values must go).
-    var BS_MAP = {
-      "--bs-body-bg": "bg", "--bs-body-color": "text",
-      "--bs-secondary-bg": "surface", "--bs-tertiary-bg": "surface",
-      "--bs-secondary-color": "text", "--bs-emphasis-color": "text",
-      "--bs-border-color": "border", "--bs-link-color": "link",
-      "--bs-link-hover-color": "link", "--bs-heading-color": "heading"
-    };
-    Object.keys(BS_MAP).forEach(function (v) {
-      if (state.theme === "custom") root.style.setProperty(v, state.customTheme[BS_MAP[v]]);
+    // Custom page theme: write eLabFTW's variables inline; clear them for presets
+    // (presets set them via CSS, so leftover inline values must go).
+    var cv = customVars(state.customTheme);
+    CUSTOM_INLINE.forEach(function (v) {
+      if (state.theme === "custom") root.style.setProperty(v, cv[v]);
       else root.style.removeProperty(v);
     });
+
+    // Accent: eLabFTW's primary + links. Inline beats the preset's CSS value and
+    // the primary color from the user control panel; clearing it puts the
+    // server's inline value back (or removes ours).
+    if (state.accent) {
+      root.style.setProperty("--primary", state.accent);
+      root.style.setProperty("--primary-fg", fgFor(state.accent));
+      root.style.setProperty("--link", state.accent);
+      root.style.setProperty("--link-hover", state.accent);
+    } else {
+      restoreInline("--primary");
+      restoreInline("--primary-fg");
+      if (state.theme !== "custom") {
+        root.style.removeProperty("--link");
+        root.style.removeProperty("--link-hover");
+      }
+    }
 
     // Custom code theme: drive --ec-* inline; clear them for preset code themes.
     var EC_MAP = {
@@ -880,8 +818,9 @@
         "codetheme", "codefont", "customTheme", "customCode"].forEach(function (k) {
         try { localStorage.removeItem(NS + k); } catch (e) {}
       });
+      set("schema", "4");
       state = {
-        theme: "light", accent: "#29aeb9", fontLatin: "system", fontJa: "system",
+        theme: "native", accent: "", fontLatin: "system", fontJa: "system",
         density: "comfortable", code: "on", codewrap: "off", codetheme: "vscode-dark",
         codefont: "system-mono",
         customTheme: Object.assign({}, DEFAULT_CUSTOM_THEME),
@@ -959,6 +898,7 @@
   // --- boot -----------------------------------------------------------------
   function init() {
     if (!isElabFTW()) return; // not an eLabFTW page → do nothing
+    snapshotNative();
     injectBaseCss();
     apply();
     buildPanel();

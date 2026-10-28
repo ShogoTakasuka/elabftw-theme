@@ -1,18 +1,20 @@
 # eLabFTW Theme
 
-A per-user **skin for [eLabFTW](https://www.elabftw.net/)** — switch themes, pick
-any accent color, choose separate fonts for text and code, and give code blocks a
-proper editor look with syntax highlighting.
+A per-user **skin for [eLabFTW](https://www.elabftw.net/)** — extra color themes on
+top of eLabFTW's own Light / Dark / Midnight, any accent color, separate fonts for
+text and code, and code blocks with a proper editor look and syntax highlighting.
 
-**[eLabFTW](https://www.elabftw.net/) を各自のブラウザで着せ替えする userscript** です。テーマ切替・アクセントカラー・本文/コード別フォント・コードのシンタックスハイライトができます。
+**[eLabFTW](https://www.elabftw.net/) を各自のブラウザで着せ替えする userscript** です。eLabFTW 自身の Light / Dark / Midnight に追加テーマを重ね、アクセントカラー・本文/コード別フォント・コードのシンタックスハイライトができます。
 
 It runs as a [userscript](https://en.wikipedia.org/wiki/Userscript) in your own
 browser, so it:
 
 - **never changes eLabFTW or its server** — your admin's installation is untouched,
 - **applies to you only** — settings are stored in your own browser (`localStorage`),
-- **survives eLabFTW upgrades** — colors are applied by overriding Bootstrap 5 CSS
-  variables (`--bs-*`), not fragile class names,
+- **cooperates with eLabFTW's own theming** — colors are applied by overriding the
+  CSS variables eLabFTW itself paints with (`--mainbackground`, `--white`,
+  `--primary`, `--link`, …), so eLabFTW keeps styling every component and the two
+  never fight; the default **"eLabFTW setting"** changes nothing at all,
 - **works on any eLabFTW instance** — it auto-detects eLabFTW and does nothing on
   other sites.
 
@@ -20,7 +22,7 @@ browser, so it:
 
 - **eLabFTW 本体・サーバーを一切変更しません**（管理者の環境はそのまま）
 - **あなたにだけ適用**されます（設定はご自身のブラウザ `localStorage` に保存）
-- **アップグレードに強い**（Bootstrap 5 の CSS 変数 `--bs-*` を上書きするだけで、壊れやすいクラス名に依存しません）
+- **eLabFTW 自身のテーマ機構と協調**（eLabFTW が画面を塗るのに使っている CSS 変数 `--mainbackground` `--white` `--primary` `--link` などを上書きするだけなので、各部品の配色は eLabFTW 側が引き続き担当し、2 系統の色が混ざりません。既定の **「eLabFTW setting」** は何も変更しません）
 - **どの eLabFTW でも動作**（自動判定し、eLabFTW 以外のサイトでは何もしません）
 
 <!-- Add a screenshot once published, e.g. / 公開後にスクショを追加:
@@ -31,13 +33,13 @@ browser, so it:
 
 | | |
 |---|---|
-| 🎨 **Themes / テーマ** | Light · Dark · Midnight (OLED) · Nord · Dracula · Solarized Dark/Light · Gruvbox Dark/Light · Tokyo Night · One Dark · Catppuccin Mocha · High contrast · **Custom…** |
-| 🌈 **Accent / アクセント色** | Any color via a native color picker / カラーピッカーで任意の色（色相環・RGB） |
+| 🎨 **Themes / テーマ** | **eLabFTW setting** (its own Light / Dark / Midnight, default) · Dark · Midnight (OLED) · Nord · Dracula · Solarized Dark/Light · Sepia · Gruvbox Dark/Light · Tokyo Night · One Dark · Catppuccin Mocha · High contrast · **Custom…** |
+| 🌈 **Accent / アクセント色** | Any color for buttons, active items and links via a native color picker; unset by default so a primary color chosen in eLabFTW's user control panel shows through / ボタン・選択中項目・リンクの色をカラーピッカーで任意指定。既定は未設定で、eLabFTW のユーザー設定で選んだ primary 色がそのまま使われます |
 | 🔤 **Text font / 本文フォント** | Separate picks for **Latin** and **Japanese** / **欧文**と**和文**を個別指定（例：英字は Times New Roman、日本語は明朝） |
 | `</>` **Code / コード** | VS Code–style highlighting, 17 palettes + **Custom…** / VS Code 風の配色17種＋任意色。VS Code, GitHub, Monokai, Dracula, Nord, One Dark, Shades of Purple, Gruvbox, Tokyo Night, … |
 | ⌨️ **Code font / コードフォント** | Monospace font just for code / コード専用の等幅（Courier New, Consolas, JetBrains Mono, …） |
 | ↕️ **Density / 余白** | Comfortable · Compact |
-| 🌓 **Dark readability / ダーク可読性** | Dark themes also re-color tables, cards, forms / ダークでは表・カード・フォームも読みやすく再着色 |
+| 🌓 **Dark readability / ダーク可読性** | Dark presets switch eLabFTW into its own dark palette (alerts, modals, status colors) and clear hard-coded light backgrounds inside note bodies / ダーク系プリセットは eLabFTW 自身のダークパレット（警告・モーダル・状態色）に切り替え、ノート本文内の固定の明色背景も透過させます |
 
 Everything lives in a small **🎨 panel** at the bottom-left. Changes apply instantly
 and are remembered per browser. Pick **Custom…** to set every color yourself.
@@ -94,12 +96,36 @@ instantly on non-eLabFTW pages. To run it only on your server, edit the header:
 // @match https://elab.example.org/*
 ```
 
+## How it relates to eLabFTW's own themes / eLabFTW 自身のテーマとの関係
+
+- eLabFTW 6.0 lets you pick **Light / Dark / Midnight** and a **primary color** in
+  the user control panel. With the default **"eLabFTW setting"** this script leaves
+  all of that untouched.
+  / eLabFTW 6.0 はユーザー設定で **Light / Dark / Midnight** と **primary 色**を選べます。既定の **「eLabFTW setting」** ではそれらに一切手を触れません。
+- A preset here (Nord, Dracula, …) replaces eLabFTW's palette for the page and its
+  components. A dark preset also switches eLabFTW into its own dark mode so alerts,
+  modals and status colors match.
+  / ここでプリセット（Nord, Dracula など）を選ぶと、ページと各部品の配色が置き換わります。ダーク系プリセットは eLabFTW 自身もダークモードに切り替えるので、警告・モーダル・状態色も揃います。
+- A primary color set in eLabFTW's user control panel **wins over a preset's**;
+  only the accent picker here overrides it, and clearing the accent restores it.
+  / eLabFTW のユーザー設定で選んだ primary 色は**プリセットより優先**されます。ここでアクセントを指定した間だけ上書きされ、解除すると戻ります。
+- Switching theme in eLabFTW's own control panel while a preset is active takes
+  effect on the next page load.
+  / プリセット使用中に eLabFTW 側でテーマを切り替えた場合は、次のページ読み込みから反映されます。
+
 ## Compatibility / 対応
 
-- Works on **eLabFTW 5.5.x and 6.0.x**. v3.0.0 fixed detection for 6.0, whose
-  pages no longer load an asset named `elabftw.*` (the script exited silently).
-  / **eLabFTW 5.5.x と 6.0.x** で動作。6.0 ではアセット名が変わり自動判定が全て外れて
-  無言で終了していたため、v3.0.0 で判定を修正。
+- Works on **eLabFTW 5.5.x and 6.0.x** (both ship Bootstrap 4 and the same CSS
+  variable names; `--link` and `--primary-fg` are 6.0-only and ignored on 5.5).
+  / **eLabFTW 5.5.x と 6.0.x** で動作（どちらも Bootstrap 4 で CSS 変数名も共通。`--link` と `--primary-fg` は 6.0 のみで、5.5 では無視されます）。
+- **v4.0.0** rebuilt theming on eLabFTW's own variables (earlier versions drove
+  Bootstrap variables that eLabFTW never read and overrode components by class).
+  Saved settings carry over: the old "Light" preset becomes "eLabFTW setting" and
+  the old always-on default accent becomes unset.
+  / **v4.0.0** で eLabFTW 自身の変数に乗り換えました（旧版は eLabFTW が参照しない Bootstrap 変数を定義し、部品をクラス名で上書きしていました）。保存済み設定は引き継がれ、旧「Light」は「eLabFTW setting」に、旧既定のアクセント色は未設定になります。
+- **v3.0.0** fixed detection for 6.0, whose pages no longer load an asset named
+  `elabftw.*` (the script exited silently).
+  / **v3.0.0** で 6.0 の自動判定を修正（アセット名が変わり無言で終了していました）。
 - Code highlighting reuses eLabFTW's own Prism tokens when present and falls back
   to highlight.js, so there's no double-processing.
   / コードは既存の Prism トークンを活かし、無ければ highlight.js で補完（二重処理なし）。
